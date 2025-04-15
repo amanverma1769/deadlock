@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Deadlock Toolkit</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    textarea, input {
+      transition: all 0.3s ease;
+    }
+    textarea:focus, input:focus {
+      border-color: #7c3aed;
+      box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.2);
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-purple-100 via-blue-100 to-indigo-200 min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-5xl bg-white/30 backdrop-blur-xl border border-white/40 shadow-2xl rounded-3xl p-8 sm:p-10 space-y-8">
+    <h1 class="text-3xl sm:text-4xl font-bold text-center text-purple-700 drop-shadow-sm flex items-center justify-center gap-2">
+      <span>💻</span> Deadlock Prevention & Detection Toolkit
+    </h1>
+
+    <!-- Form Section -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Allocation -->
+      <div>
+        <label class="block font-semibold text-gray-800 mb-2">Allocation Matrix</label>
+        <textarea id="allocation" rows="3" class="w-full p-3 border border-gray-300 rounded-xl bg-white/70 shadow-inner focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="e.g. 0 1, 2 0"></textarea>
+        <p class="text-sm text-gray-600 mt-1">Comma-separated rows</p>
+      </div>
+
+      <!-- Max -->
+      <div>
+        <label class="block font-semibold text-gray-800 mb-2">Max Matrix</label>
+        <textarea id="max" rows="3" class="w-full p-3 border border-gray-300 rounded-xl bg-white/70 shadow-inner focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="e.g. 3 2, 2 2"></textarea>
+        <p class="text-sm text-gray-600 mt-1">Comma-separated rows</p>
+      </div>
+
+      <!-- Available -->
+      <div>
+        <label class="block font-semibold text-gray-800 mb-2">Available Resources</label>
+        <input id="available" class="w-full p-3 border border-gray-300 rounded-xl bg-white/70 shadow-inner focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="e.g. 1 1"/>
+        <p class="text-sm text-gray-600 mt-1">Space-separated values</p>
+      </div>
+
+      <!-- Request -->
+      <div>
+        <label class="block font-semibold text-gray-800 mb-2">Request Matrix (for Detection)</label>
+        <textarea id="request" rows="3" class="w-full p-3 border border-gray-300 rounded-xl bg-white/70 shadow-inner focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="e.g. 1 0, 0 1"></textarea>
+        <p class="text-sm text-gray-600 mt-1">Comma-separated rows</p>
+      </div>
+    </div>
+
+    <!-- Buttons -->
+    <div class="flex flex-wrap justify-center gap-4 mt-6">
+      <button onclick="checkSafe()" class="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold shadow-lg hover:bg-blue-700 transform hover:scale-105 transition duration-200">
+        ✅ Check Safe State
+      </button>
+      <button onclick="detectDeadlock()" class="px-6 py-3 bg-red-600 text-white rounded-xl font-semibold shadow-lg hover:bg-red-700 transform hover:scale-105 transition duration-200">
+        ⚠️ Detect Deadlock
+      </button>
+      <button onclick="drawGraph()" class="px-6 py-3 bg-green-600 text-white rounded-xl font-semibold shadow-lg hover:bg-green-700 transform hover:scale-105 transition duration-200">
+        📊 Show Resource Graph
+      </button>
+    </div>
+
+    <!-- Result -->
+    <div id="result" class="text-lg font-semibold text-center p-4 rounded-xl bg-green-100/60 text-green-800 shadow-inner hidden"></div>
+
+    <!-- Graph Display -->
+    <div id="graph-container" class="mt-4 text-center hidden">
+      <img id="graph-image" src="" alt="Resource Allocation Graph" class="mx-auto mt-4 rounded-xl shadow-xl border border-gray-300 max-w-full"/>
+    </div>
+  </div>
+
+  <!-- Script -->
+  <script>
+    function parseMatrix(input) {
+      return input.trim().split(',').map(row => row.trim().split(/\s+/).map(Number));
+    }
+
+    function parseArray(input) {
+      return input.trim().split(/\s+/).map(Number);
+    }
+
+    function checkSafe() {
+      const allocation = parseMatrix(document.getElementById("allocation").value);
+      const max = parseMatrix(document.getElementById("max").value);
+      const available = parseArray(document.getElementById("available").value);
+
+      fetch('/check-safe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allocation, max, available })
+      })
+      .then(res => res.json())
+      .then(data => {
+        const result = document.getElementById("result");
+        result.classList.remove("hidden");
+        result.innerText = data.safe
+          ? "✅ Safe State. Safe Sequence: " + data.sequence.join(" → ")
+          : "❌ Unsafe State Detected!";
+        result.classList.toggle("bg-red-100/60", !data.safe);
+        result.classList.toggle("text-red-800", !data.safe);
+        result.classList.toggle("bg-green-100/60", data.safe);
+        result.classList.toggle("text-green-800", data.safe);
+      });
+    }
+
+    function detectDeadlock() {
+      const allocation = parseMatrix(document.getElementById("allocation").value);
+      const request = parseMatrix(document.getElementById("request").value);
+
+      fetch('/detect-deadlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allocation, request })
+      })
+      .then(res => res.json())
+      .then(data => {
+        const result = document.getElementById("result");
+        result.classList.remove("hidden");
+        result.innerText = data.deadlocked.length > 0
+          ? "⚠️ Deadlock Detected in Processes: " + data.deadlocked.join(", ")
+          : "✅ No Deadlock Detected!";
+        result.classList.toggle("bg-red-100/60", data.deadlocked.length > 0);
+        result.classList.toggle("text-red-800", data.deadlocked.length > 0);
+        result.classList.toggle("bg-green-100/60", data.deadlocked.length === 0);
+        result.classList.toggle("text-green-800", data.deadlocked.length === 0);
+      });
+    }
+
+    function drawGraph() {
+      const allocation = parseMatrix(document.getElementById("allocation").value);
+      const max = parseMatrix(document.getElementById("max").value);
+      const available = parseArray(document.getElementById("available").value);
+
+      fetch('/draw-graph', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allocation, max, available })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === "success") {
+          const img = document.getElementById("graph-image");
+          img.src = "/static/graph.png?" + new Date().getTime();
+          img.classList.remove("hidden");
+          document.getElementById("graph-container").classList.remove("hidden");
+        } else {
+          alert("❌ Failed to draw the graph.");
+        }
+      });
+    }
+  </script>
+</body>
+</html>
